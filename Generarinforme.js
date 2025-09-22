@@ -271,8 +271,37 @@ function taulaA(nomPestanya, cos, spreadsheet) {
   var taula = cos.insertTable(index, taulaContingut);
   formatarCapcalera(taula, colorFons);
 
+  // Normalitzar mida de lletra del cos (evitar herències de 3 pt). No toquem la fila 0 (capçalera)
+  for (var rNorm = 1; rNorm < taula.getNumRows(); rNorm++) {
+    var filaNorm = taula.getRow(rNorm);
+    for (var cNorm = 0; cNorm < filaNorm.getNumCells(); cNorm++) {
+      var cellNorm = filaNorm.getCell(cNorm);
+      for (var ch = 0; ch < cellNorm.getNumChildren(); ch++) {
+        var fill = cellNorm.getChild(ch);
+        if (fill.getType() === DocumentApp.ElementType.PARAGRAPH) {
+          fill.asParagraph().setFontSize(11); // Assumpció: mida desitjada 11 pt
+        }
+      }
+    }
+  }
+
   for (var r = 1; r < taula.getNumRows(); r++) {
     taula.getRow(r).getCell(0).getChild(0).asParagraph().setBold(true);
+  }
+
+  // Eliminar negrita de la segona columna (índex 1) en les files del cos (r >= 1)
+  for (var r2 = 1; r2 < taula.getNumRows(); r2++) {
+    var cell2 = taula.getRow(r2).getCell(1);
+    for (var k2 = 0; k2 < cell2.getNumChildren(); k2++) {
+      var child2 = cell2.getChild(k2);
+      if (child2.getType() === DocumentApp.ElementType.PARAGRAPH) {
+        var text2 = child2.asParagraph().editAsText();
+        var len2 = text2.getText().length;
+        if (len2 > 0) {
+          text2.setBold(0, len2 - 1, false);
+        }
+      }
+    }
   }
 
   var odsMap = { 1: "https://drive.google.com/uc?export=download&id=1HR8D87Kopm8hzarpICrylOKzX5AZJhG-", 2: "https://drive.google.com/uc?export=download&id=1rj4A7utzAxNgokWGgP5In_hAV0aWz16h", 3: "https://drive.google.com/uc?export=download&id=1WRBMYanemJm8QpOIrYdGE7CM4NfWo_Zt", 4: "https://drive.google.com/uc?export=download&id=116thhnZN-EftgAmk8epm1DCLysgB0NfR", 5: "https://drive.google.com/uc?export=download&id=1cnyGVYu_yiKVU-x-Z2rg6W_CH3b9giNB", 6: "https://drive.google.com/uc?export=download&id=1pBKpVC8BcplyQMSBK692Tj4eI4CwcOjC", 7: "https://drive.google.com/uc?export=download&id=1N8eCVXU7jDYrbBOJ-PLn4UTa4Txs1wq9", 8: "https://drive.google.com/uc?export=download&id=1MLQ_neg9vF0Dmn2IlS0YBUOcmF8Pd1_5", 9: "https://drive.google.com/uc?export=download&id=1TS5R6Gd8SXNKEC6JxNT4LdZds8GbbhNX", 10: "https://drive.google.com/uc?export=download&id=12FSqsOGriXFTiNAS4LOiYjAcRE1YZDmX", 11: "https://drive.google.com/uc?export=download&id=1jP0ON8z_u9h9XGNPyVDdlL20-ZORALgv", 12: "https://drive.google.com/uc?export=download&id=1yjiXhApkCm3VKu4FJV8JNmIyLN6fIdRb", 13: "https://drive.google.com/uc?export=download&id=1JGyCxDz9URl4TBDIicwYWiauhqo_ovYm", 14: "https://drive.google.com/uc?export=download&id=1Dn3-DWi9X73cGC4pAFyVTPt1OqHzG1Ao", 15: "https://drive.google.com/uc?export=download&id=1BBWN7-4y5XeDA0GSWv7GcCUKvm6AaA7o", 16: "https://drive.google.com/uc?export=download&id=11YIN8wNwlJNO4ltE7-W7bwV-K7cihG-f", 17: "https://drive.google.com/uc?export=download&id=1oYvcKtei-IgDRGe7EU_FMNCUb3wF8LvS", 18: "https://drive.google.com/uc?export=download&id=1ANKdpkSsl7mHv5dN1U_1N-gkUuGeoaFp" };
