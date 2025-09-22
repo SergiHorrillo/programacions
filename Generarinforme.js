@@ -125,6 +125,8 @@ function inserirImatgesPortada(cos, fulla) {
     }
   }
 
+  var puntsPerCm = 28.35;
+
   // --- Processar la imatge de portada (IMG1) ---
   var urlImg1 = fulla.getRange("R2").getValue();
   var idImg1 = extreureIdDeUrl(urlImg1);
@@ -140,7 +142,9 @@ function inserirImatgesPortada(cos, fulla) {
         var imatge1 = DriveApp.getFileById(idImg1).getBlob();
         var imatgeInserida1 = parent1.appendInlineImage(imatge1);
         
-        // Imatge inserida al seu tamany natural
+        // Ajustem la mida a 9x9 cm
+        imatgeInserida1.setWidth(9 * puntsPerCm);
+        imatgeInserida1.setHeight(9 * puntsPerCm);
       } catch (e) {
         Logger.log("Error en inserir la imatge IMG1 (ID: " + idImg1 + "). Assegura't que l'arxiu existeix i tens permisos. Error: " + e.message);
         parent1.appendText("<<ERROR: No s'ha pogut carregar la imatge IMG1>>");
@@ -163,7 +167,11 @@ function inserirImatgesPortada(cos, fulla) {
         var imatge2 = DriveApp.getFileById(idImg2).getBlob();
         var imatgeInserida2 = parentCell.insertImage(0, imatge2);
         
-        // Imatge inserida al seu tamany natural
+        // Ajustem a un ample de 15 cm mantenint la proporció
+        var ampleFix2 = 15 * puntsPerCm;
+        var ratio2 = imatgeInserida2.getHeight() / imatgeInserida2.getWidth();
+        imatgeInserida2.setWidth(ampleFix2);
+        imatgeInserida2.setHeight(ampleFix2 * ratio2);
       } catch (e) {
           Logger.log("Error en inserir la imatge IMG2 (ID: " + idImg2 + "). Assegura't que l'arxiu existeix i tens permisos. Error: " + e.message);
           parentCell.setText("<<ERROR: No s'ha pogut carregar la imatge IMG2>>");
