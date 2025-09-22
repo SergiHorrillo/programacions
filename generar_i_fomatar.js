@@ -100,7 +100,7 @@ function generarDocumentPrograma() {
   document.saveAndClose();
   // Eliminat DocumentApp.flush(); en entorn on no està disponible i provocava TypeError
   Logger.log('[GEN] Document generat en ' + (Date.now() - inici) + ' ms. DocID=' + docId);
-  return { docId: docId, nomCopia: nomCopia };
+  return { docId: docId, nomCopia: nomCopia, numPestanyes: numPestanyes };
 }
 
 // ============================= CONFIG GLOBAL =============================
@@ -139,6 +139,39 @@ function esperarDisponibilitatDoc(docId) {
     }
   }
   throw new Error('Document no disponible després d\'esperar. DocID=' + docId);
+}
+
+// ============================= VERIFICACIÓ ESTRUCTURAL =============================
+/**
+ * Compta el nombre de taules presents al document (via Docs API).
+ */
+function comptarTaulesDoc_(docId) {
+  var docStruct = Docs.Documents.get(docId, { fields: 'body/content' });
+  if (!docStruct || !docStruct.body || !docStruct.body.content) return 0;
+  var total = 0;
+  for (var i = 0; i < docStruct.body.content.length; i++) {
+    if (docStruct.body.content[i].table) total++;
+  }
+  return total;
+}
+
+/**
+ * Espera fins que hi hagi com a mínim "esperades" taules (o llança error després d'intents).
+ * Si el document té més taules (per plantilla), la condició es compleix igualment.
+ */
+function esperarEstructuraCompleta(docId, esperades) {
+  var intents = 6;
+  for (var i = 1; i <= intents; i++) {
+    var compt = comptarTaulesDoc_(docId);
+    if (compt >= esperades) {
+      Logger.log('[WAIT-STRUCT] Taules detectades ' + compt + ' (>= ' + esperades + ') al intent ' + i);
+      return compt;
+    }
+    var espera = 400 + (i - 1) * 300;
+    Logger.log('[WAIT-STRUCT] Detectades ' + compt + '/' + esperades + ' taules. Esperant ' + espera + ' ms (intent ' + i + ')');
+    Utilities.sleep(espera);
+  }
+  throw new Error('Estructura incompleta: no s\'han detectat ' + esperades + ' taules després d\'esperar.');
 }
 
 // ============================= FORMATADOR (API DOCS) =============================
@@ -280,7 +313,15 @@ function generarIFormatar() {
   try {
     var resultat = generarDocumentPrograma();
     esperarDisponibilitatDoc(resultat.docId);
-    Utilities.sleep(400); // pausa addicional per estabilitzar índexos a l'API Docs
+    // Verificació estructural: esperem el nombre mínim de taules (4 per pestanya)
+    var esperades = resultat.numPestanyes * 4;
+    try {
+      esperarEstructuraCompleta(resultat.docId, esperades);
+    } catch (eStruct) {
+      // No aturem el procés, però avisem (pot ser que la plantilla tingui placeholders absents)
+      Logger.log('[WARN][STRUCT] ' + eStruct);
+    }
+    Utilities.sleep(300); // breu pausa final abans del formatador
     aplicarFormatador(resultat.docId);
     Logger.log('[DONE] URL: https://docs.google.com/document/d/' + resultat.docId + '/edit');
     return resultat.docId;
