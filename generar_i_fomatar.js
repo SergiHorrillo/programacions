@@ -104,7 +104,7 @@ function generarDocumentPrograma() {
   }
 
   document.saveAndClose();
-  DocumentApp.flush();
+  // Eliminat DocumentApp.flush(); en entorn on no està disponible i provocava TypeError
   Logger.log('[GEN] Document generat en ' + (Date.now() - inici) + ' ms. DocID=' + docId);
   return { docId: docId, nomCopia: nomCopia };
 }
@@ -185,33 +185,36 @@ function combinarCelaTaulesA_(docId) {
     var firstCellContent = primerElement.paragraph.elements[0].textRun.content || '';
 
     if (firstCellContent.indexOf('BLOC') !== -1) {
-      mergeRequests.push({
-        mergeTableCells: {
-          tableRange: {
-            tableCellLocation: {
-              tableStartLocation: { index: tableElement.startIndex },
-              rowIndex: 1,
-              columnIndex: 2
-            },
-            rowSpan: 3,
-            columnSpan: 1
+      var totalRows = table.tableRows.length; // inclou capçalera
+      var bodyRows = Math.max(0, totalRows - 1);
+      var span = Math.min(3, bodyRows); // fins a 3 files o les disponibles
+      if (span > 1) { // només té sentit merge si hi ha 2 o més files a combinar
+        mergeRequests.push({
+          mergeTableCells: {
+            tableRange: {
+              tableCellLocation: {
+                tableStartLocation: { index: tableElement.startIndex },
+                rowIndex: 1,
+                columnIndex: 2
+              },
+              rowSpan: span,
+              columnSpan: 1
+            }
           }
-        }
-      });
+        });
+      }
     }
   }
 
   if (!mergeRequests.length) {
-    Logger.log('[FMT-MERGE] Cap taula A trobada per combinar.');
+    Logger.log('[FMT-MERGE] Cap taula A per combinar (o massa curta).');
     return;
   }
-  // Ordenar invers per evitar invalidació d'índexs.
   mergeRequests.sort(function(a,b){
     return b.mergeTableCells.tableRange.tableCellLocation.tableStartLocation.index - a.mergeTableCells.tableRange.tableCellLocation.tableStartLocation.index;
   });
-
   Docs.Documents.batchUpdate({ requests: mergeRequests }, docId);
-  Logger.log('[FMT-MERGE] Combinades ' + mergeRequests.length + ' taules A.');
+  Logger.log('[FMT-MERGE] Combinades ' + mergeRequests.length + ' taules A (rowSpan dinàmic).');
 }
 
 /**
@@ -247,6 +250,7 @@ function generarIFormatar() {
   try {
     var resultat = generarDocumentPrograma();
     esperarDisponibilitatDoc(resultat.docId);
+    Utilities.sleep(400); // pausa addicional per estabilitzar índexos a l'API Docs
     aplicarFormatador(resultat.docId);
     Logger.log('[DONE] URL: https://docs.google.com/document/d/' + resultat.docId + '/edit');
     return resultat.docId;
