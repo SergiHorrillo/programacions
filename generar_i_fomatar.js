@@ -21,15 +21,9 @@ function generarDocumentPrograma() {
   var valorE2 = fulla.getRange('E2').getValue();
   var valorF2 = fulla.getRange('F2').getValue();
 
-  // Selecció plantilla
-  var templateId = '';
-  if (valorE2 == 1) {
-    templateId = (valorF2 == 3) ? '15LHorRbkTuK0XGiRVFtLOJQYGCbpGqEBVsvc1Bur6o4' : '1hNc9qoNRvH8KKPHiT8BnEdwIVr-psDQyrzJLnftwzow';
-  } else if (valorE2 == 2) {
-    if (valorF2 == 4) templateId = '1tkUFPF7YgNiOtEUA9iGOEcZ9VDpLhsygtNwiDEPmlHs';
-    else if (valorF2 == 5) templateId = '1-3RZzp8jS-CXOjzlfIVdm1vf9UdV_oWx24JEU_6tZz0';
-  }
-  if (!templateId) throw new Error('No hi ha plantilla per a E2=' + valorE2 + ' i F2=' + valorF2);
+  // Selecció plantilla via CONFIG
+  var templateId = CONFIG.selectTemplate(valorE2, valorF2);
+  if (!templateId) throw new Error('No hi ha plantilla per a combinació E2=' + valorE2 + ' F2=' + valorF2);
 
   var nomBase = fulla.getRange('B2').getValue();
   var ara = new Date();
@@ -109,6 +103,25 @@ function generarDocumentPrograma() {
   return { docId: docId, nomCopia: nomCopia };
 }
 
+// ============================= CONFIG GLOBAL =============================
+/**
+ * Centralitza constants i selecció de plantilles / ODS.
+ */
+var CONFIG = (function(){
+  var PUNTS_PER_CM = 28.35;
+  var TEMPLATES = {
+    '1_3': '15LHorRbkTuK0XGiRVFtLOJQYGCbpGqEBVsvc1Bur6o4',
+    '1_default': '1hNc9qoNRvH8KKPHiT8BnEdwIVr-psDQyrzJLnftwzow',
+    '2_4': '1tkUFPF7YgNiOtEUA9iGOEcZ9VDpLhsygtNwiDEPmlHs',
+    '2_5': '1-3RZzp8jS-CXOjzlfIVdm1vf9UdV_oWx24JEU_6tZz0'
+  };
+  var ODS_MAP = { 1: "https://drive.google.com/uc?export=download&id=1HR8D87Kopm8hzarpICrylOKzX5AZJhG-", 2: "https://drive.google.com/uc?export=download&id=1rj4A7utzAxNgokWGgP5In_hAV0aWz16h", 3: "https://drive.google.com/uc?export=download&id=1WRBMYanemJm8QpOIrYdGE7CM4NfWo_Zt", 4: "https://drive.google.com/uc?export=download&id=116thhnZN-EftgAmk8epm1DCLysgB0NfR", 5: "https://drive.google.com/uc?export=download&id=1cnyGVYu_yiKVU-x-Z2rg6W_CH3b9giNB", 6: "https://drive.google.com/uc?export=download&id=1pBKpVC8BcplyQMSBK692Tj4eI4CwcOjC", 7: "https://drive.google.com/uc?export=download&id=1N8eCVXU7jDYrbBOJ-PLn4UTa4Txs1wq9", 8: "https://drive.google.com/uc?export=download&id=1MLQ_neg9vF0Dmn2IlS0YBUOcmF8Pd1_5", 9: "https://drive.google.com/uc?export=download&id=1TS5R6Gd8SXNKEC6JxNT4LdZds8GbbhNX", 10: "https://drive.google.com/uc?export=download&id=12FSqsOGriXFTiNAS4LOiYjAcRE1YZDmX", 11: "https://drive.google.com/uc?export=download&id=1jP0ON8z_u9h9XGNPyVDdlL20-ZORALgv", 12: "https://drive.google.com/uc?export=download&id=1yjiXhApkCm3VKu4FJV8JNmIyLN6fIdRb", 13: "https://drive.google.com/uc?export=download&id=1JGyCxDz9URl4TBDIicwYWiauhqo_ovYm", 14: "https://drive.google.com/uc?export=download&id=1Dn3-DWi9X73cGC4pAFyVTPt1OqHzG1Ao", 15: "https://drive.google.com/uc?export=download&id=1BBWN7-4y5XeDA0GSWv7GcCUKvm6AaA7o", 16: "https://drive.google.com/uc?export=download&id=11YIN8wNwlJNO4ltE7-W7bwV-K7cihG-f", 17: "https://drive.google.com/uc?export=download&id=1oYvcKtei-IgDRGe7EU_FMNCUb3wF8LvS", 18: "https://drive.google.com/uc?export=download&id=1ANKdpkSsl7mHv5dN1U_1N-gkUuGeoaFp" };
+  function selectTemplate(e2, f2){
+    return TEMPLATES[e2 + '_' + f2] || TEMPLATES[e2 + '_default'] || null;
+  }
+  return { PUNTS_PER_CM: PUNTS_PER_CM, ODS_MAP: ODS_MAP, selectTemplate: selectTemplate };
+})();
+
 // ============================= ESPERA DISPONIBILITAT =============================
 /**
  * Espera fins que el document estigui accessible per l'API de Docs.
@@ -133,7 +146,7 @@ function esperarDisponibilitatDoc(docId) {
  * Aplica amplades de columnes a taules A i D.
  */
 function aplicarAmpladesTaules_(docId) {
-  var puntsPerCm = 28.35;
+  var puntsPerCm = CONFIG.PUNTS_PER_CM;
   var docStruct = Docs.Documents.get(docId, { fields: 'body/content' });
   var allTables = docStruct.body.content.filter(function(e){ return !!e.table; });
   var widthRequests = [];
