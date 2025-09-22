@@ -70,21 +70,9 @@ function generarDocumentPrograma() {
     cos.replaceText('<<AUTORIA>>', textAUT);
   }
 
-  // Taules per pestanyes Ln
+  // Taules per pestanyes Ln (versió optimitzada batch)
   var numPestanyes = valorE2 * valorF2;
-  for (var i = 1; i <= numPestanyes; i++) {
-    var nomPestanya = 'L' + i;
-    var sheetLn = spreadsheet.getSheetByName(nomPestanya);
-    if (sheetLn) {
-      var titol = sheetLn.getRange('B1:C1').getValue();
-      cos.replaceText('<<Titol_' + nomPestanya + '>>', titol);
-    }
-    // Assumim que les funcions taulaA..D existeixen (estan definides en aquest mateix fitxer o un altre carregat)
-    if (typeof taulaA === 'function') taulaA(nomPestanya, cos, spreadsheet);
-    if (typeof taulaB === 'function') taulaB(nomPestanya, cos, spreadsheet);
-    if (typeof taulaC === 'function') taulaC(nomPestanya, cos, spreadsheet);
-    if (typeof taulaD === 'function') taulaD(nomPestanya, cos, spreadsheet);
-  }
+  generarTaulesBatch_(spreadsheet, cos, numPestanyes);
 
   // Placeholders PLn
   for (var p = 1; p <= numPestanyes; p++) {
@@ -101,6 +89,215 @@ function generarDocumentPrograma() {
   // Eliminat DocumentApp.flush(); en entorn on no està disponible i provocava TypeError
   Logger.log('[GEN] Document generat en ' + (Date.now() - inici) + ' ms. DocID=' + docId);
   return { docId: docId, nomCopia: nomCopia, numPestanyes: numPestanyes };
+}
+
+// ============================= CACHÉ ODS =============================
+var ODS_BLOB_CACHE = {};
+function obtenirOdsBlob_(num) {
+  var url = CONFIG.ODS_MAP[num];
+  if (!url) return null;
+  if (!ODS_BLOB_CACHE[num]) {
+    try {
+      ODS_BLOB_CACHE[num] = UrlFetchApp.fetch(url).getBlob();
+    } catch (e) {
+      Logger.log('[ODS][ERR] No s\'ha pogut descarregar ODS ' + num + ': ' + e);
+      return null;
+    }
+  }
+  return ODS_BLOB_CACHE[num];
+}
+
+// ============================= GENERACIÓ TAULES (BATCH) =============================
+function generarTaulesBatch_(spreadsheet, cos, numPestanyes) {
+  for (var i = 1; i <= numPestanyes; i++) {
+    var nomPestanya = 'L' + i;
+    var sheet = spreadsheet.getSheetByName(nomPestanya);
+    if (!sheet) continue;
+    // Lectures en bloc dels rangs necessaris
+    var rangPrincipal = sheet.getRange('A1:G59').getValues(); // conté tot allò que necessitem per A,B,C,D
+    // Títol
+    var titol = rangPrincipal[0][1]; // B1
+    cos.replaceText('<<Titol_' + nomPestanya + '>>', titol);
+    // Construcció Taula A
+    construirTaulaA_(cos, nomPestanya, sheet, rangPrincipal);
+    // Taula B
+    construirTaulaB_(cos, nomPestanya, rangPrincipal);
+    // Taula C
+    construirTaulaC_(cos, nomPestanya, rangPrincipal);
+    // Taula D
+    construirTaulaD_(cos, nomPestanya, rangPrincipal);
+  }
+}
+
+function _eliminarPlaceholderIndex_(cos, placeholder) {
+  var found = cos.findText(placeholder);
+  if (!found) return null;
+  var element = found.getElement().getParent();
+  var index = cos.getChildIndex(element);
+  element.removeFromParent();
+  return index;
+}
+
+function construirTaulaA_(cos, nomPestanya, sheet, rang) {
+  var idx = _eliminarPlaceholderIndex_(cos, '<<PRO_' + nomPestanya + '_A>>');
+  if (idx === null) return;
+  // Dades auxiliars
+  var fullaDades = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Dades');
+  var valorC3 = parseFloat(rang[2][2]); // C3 (fila 3 idx2, col C idx2)
+  var valorF2 = parseFloat(fullaDades.getRange('F2').getValue());
+  var textBloc = (valorC3 > valorF2) ? 'BLOC II' : 'BLOC I';
+  var colorFons = (textBloc === 'BLOC I') ? '#FFDDDD' : '#DDDDFF';
+  var context = rang[2][0]; // A3
+  var repte = rang[2][1];   // B3
+  var titol = rang[0][1];   // B1
+  var taulaContingut = [
+    [textBloc, 'LLIURAMENT ' + valorC3 + ': ' + titol, 'ODS'],
+    ['CONTEXT:', context, ''],
+    ['REPTE:', repte, ''],
+    ['Components Competencials:', '', '']
+  ];
+  // Components (files 20-22 -> index 19..21, col D -> idx3)
+  var compText = '';
+  for (var f = 19; f <= 21; f++) {
+    var valD = rang[f][3];
+    if (valD) compText += '- ' + valD + '\n';
+  }
+  taulaContingut[3][1] = compText.trim();
+  var taula = cos.insertTable(idx, taulaContingut);
+  _formatarCapcalera_(taula, colorFons);
+  // Normalitzar cos (excepte capçalera)
+  for (var r = 1; r < taula.getNumRows(); r++) {
+    var fila = taula.getRow(r);
+    for (var c = 0; c < fila.getNumCells(); c++) {
+      var cell = fila.getCell(c);
+      for (var ch = 0; ch < cell.getNumChildren(); ch++) {
+        var fill = cell.getChild(ch);
+        if (fill.getType() === DocumentApp.ElementType.PARAGRAPH) fill.asParagraph().setFontSize(11);
+      }
+    }
+  }
+  // Primera columna en negreta
+  for (var r2 = 1; r2 < taula.getNumRows(); r2++) {
+    taula.getRow(r2).getCell(0).getChild(0).asParagraph().setBold(true);
+  }
+  // Treure negreta segona columna
+  for (var r3 = 1; r3 < taula.getNumRows(); r3++) {
+    var cell2 = taula.getRow(r3).getCell(1);
+    for (var k2 = 0; k2 < cell2.getNumChildren(); k2++) {
+      var child2 = cell2.getChild(k2);
+      if (child2.getType() === DocumentApp.ElementType.PARAGRAPH) {
+        var text2 = child2.asParagraph().editAsText();
+        var len2 = text2.getText().length;
+        if (len2 > 0) text2.setBold(0, len2 - 1, false);
+      }
+    }
+  }
+  // ODS (col E -> idx4 les files 20..22 -> 19..21)
+  for (var ofs = 0; ofs < 3; ofs++) {
+    var raw = rang[19 + ofs][4];
+    if (!raw || String(raw).trim() === '.') continue;
+    var odsNum = parseInt(String(raw).split('.')[0].trim());
+    if (!isNaN(odsNum)) {
+      var blob = obtenirOdsBlob_(odsNum);
+      if (blob) {
+        var celODS = taula.getRow(ofs + 1).getCell(2);
+        celODS.clear();
+        celODS.insertImage(0, blob);
+      }
+    }
+  }
+}
+
+function construirTaulaB_(cos, nomPestanya, rang) {
+  var idx = _eliminarPlaceholderIndex_(cos, '<<PRO_' + nomPestanya + '_B>>');
+  if (idx === null) return;
+  var taulaContingut = [["Objectius d'Aprenentatge", 'CE - Criteris d\'Avaluació']];
+  // Files 6..15 -> index 5..14, cols B (idx1), C (idx2), D (idx3)
+  for (var f = 5; f <= 14; f++) {
+    var valB = rang[f][1];
+    if (valB) {
+      var valC = rang[f][2];
+      var valD = rang[f][3];
+      taulaContingut.push([valB, (valC || '') + (valC && valD ? ' - ' : '') + (valD || '')]);
+    }
+  }
+  var taula = cos.insertTable(idx, taulaContingut);
+  _formatarCapcalera_(taula, '#DDDDDD');
+  for (var r = 1; r < taula.getNumRows(); r++) {
+    var cell = taula.getRow(r).getCell(1);
+    var textTotal = cell.getText();
+    var pos = textTotal.indexOf(' - ');
+    if (pos > 0) _formatejarTextParcial_(cell, 0, pos, 14);
+  }
+}
+
+function construirTaulaC_(cos, nomPestanya, rang) {
+  var idx = _eliminarPlaceholderIndex_(cos, '<<PRO_' + nomPestanya + '_C>>');
+  if (idx === null) return;
+  // Sabers files 20..29 -> index 19..28 col B -> idx1
+  var sabers = '';
+  for (var f = 19; f <= 28; f++) {
+    var val = rang[f][1];
+    if (val) sabers += '\n- ' + val;
+  }
+  sabers = sabers.trim();
+  var taula = cos.insertTable(idx, [['Sabers'], [sabers]]);
+  _formatarCapcalera_(taula, '#DDDDDD');
+}
+
+function construirTaulaD_(cos, nomPestanya, rang) {
+  var idx = _eliminarPlaceholderIndex_(cos, '<<PRO_' + nomPestanya + '_D>>');
+  if (idx === null) return;
+  // Rang activitats D32:G59 -> files 32..59 -> index 31..58, cols D..G -> idx3..6
+  var cap = ["Tipus d'activitat", 'Activitat', 'Aval. Sumativa(%)', 'Aval. Formadora'];
+  var taulaContingut = [cap];
+  for (var f = 31; f <= 58; f++) {
+    var tipus = rang[f][3];
+    if (tipus) {
+      var activitat = rang[f][4];
+      var sumativa = rang[f][5];
+      var formadoraFlag = rang[f][6];
+      var formadora = formadoraFlag ? 'SÍ' : 'NO';
+      taulaContingut.push([tipus, activitat, sumativa, formadora]);
+    }
+  }
+  var taula = cos.insertTable(idx, taulaContingut);
+  _formatarCapcalera_(taula, '#DDDDDD');
+  for (var r = 1; r < taula.getNumRows(); r++) taula.getRow(r).getCell(0).getChild(0).asParagraph().setBold(true);
+  var parent = cos;
+  var tableIndex = parent.getChildIndex(taula);
+  parent.insertPageBreak(tableIndex + 1);
+}
+
+// ============================= FORMAT HELPERS (REFAC) =============================
+function _formatarCapcalera_(taula, color) {
+  var capcalera = taula.getRow(0);
+  for (var c = 0; c < capcalera.getNumCells(); c++) {
+    var cell = capcalera.getCell(c);
+    cell.setBackgroundColor(color);
+    for (var k = 0; k < cell.getNumChildren(); k++) {
+      var child = cell.getChild(k);
+      if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+        var paragraph = child.asParagraph();
+        paragraph.setBold(true);
+        paragraph.setFontSize(12);
+      }
+    }
+  }
+}
+
+function _formatejarTextParcial_(cell, start, end, fontSize) {
+  for (var i = 0; i < cell.getNumChildren(); i++) {
+    var child = cell.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      var text = child.asParagraph().editAsText();
+      if (text.getText().length >= end) {
+        text.setBold(start, end - 1, true);
+        if (fontSize) text.setFontSize(start, end - 1, fontSize);
+      }
+      break;
+    }
+  }
 }
 
 // ============================= CONFIG GLOBAL =============================
