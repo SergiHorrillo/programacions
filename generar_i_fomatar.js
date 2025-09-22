@@ -222,23 +222,40 @@ function combinarCelaTaulesA_(docId) {
  */
 function aplicarFormatador(docId) {
   Logger.log('[FMT] Inici formatador DocID=' + docId);
-  // Fase amplades
-  try {
-    aplicarAmpladesTaules_(docId);
-  } catch (e1) {
-    Logger.log('[FMT-WIDTH][WARN] Primer intent ha fallat: ' + e1);
-    Utilities.sleep(800);
-    aplicarAmpladesTaules_(docId); // segon intent
+  var maxIntents = 3;
+  for (var intent = 1; intent <= maxIntents; intent++) {
+    var iniciIntent = Date.now();
+    try {
+      // Amplades
+      try {
+        aplicarAmpladesTaules_(docId);
+      } catch (eWidth) {
+        if (intent === maxIntents) throw new Error('Amplades fallides intent final: ' + eWidth);
+        Logger.log('[FMT-WIDTH][WARN] Intent ' + intent + ' fallit: ' + eWidth);
+        throw eWidth; // força pas al catch exterior per reintentar tot
+      }
+      // Merges
+      try {
+        combinarCelaTaulesA_(docId);
+      } catch (eMerge) {
+        if (intent === maxIntents) throw new Error('Merge fallit intent final: ' + eMerge);
+        Logger.log('[FMT-MERGE][WARN] Intent ' + intent + ' fallit: ' + eMerge);
+        throw eMerge;
+      }
+      var durada = Date.now() - iniciIntent;
+      Logger.log('[FMT] Format aplicat correctament al intent ' + intent + ' (' + durada + ' ms)');
+      return; // èxit -> sortim
+    } catch (eTotal) {
+      if (intent < maxIntents) {
+        var espera = 900 + (intent - 1) * 700;
+        Logger.log('[FMT][INFO] Reintent en ' + espera + ' ms...');
+        Utilities.sleep(espera);
+      } else {
+        Logger.log('[FMT][ERROR] Fracàs després de ' + maxIntents + ' intents: ' + eTotal);
+        throw eTotal;
+      }
+    }
   }
-  // Fase merges
-  try {
-    combinarCelaTaulesA_(docId);
-  } catch (e2) {
-    Logger.log('[FMT-MERGE][WARN] Primer intent ha fallat: ' + e2);
-    Utilities.sleep(800);
-    combinarCelaTaulesA_(docId);
-  }
-  Logger.log('[FMT] Format complet aplicat.');
 }
 
 // ============================= ORQUESTADOR =============================
