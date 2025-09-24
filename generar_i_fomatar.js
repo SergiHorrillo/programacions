@@ -97,8 +97,7 @@ function generarDocumentPrograma() {
     Logger.log('[INTRO] Placeholder <<INTRO>> no trobat a la plantilla');
   }
 
-  // Imatges de portada (es manté després de INTRO en cas que la plantilla les contingui separades)
-  if (typeof inserirImatgesPortada === 'function') inserirImatgesPortada(cos, fulla);
+  // (Eliminat codi d'inserció d'imatges <<IMG1>> / <<IMG2>>) 
 
   document.saveAndClose();
   // Eliminat DocumentApp.flush(); en entorn on no està disponible i provocava TypeError
