@@ -17,9 +17,12 @@ function generarDocumentPrograma() {
   var fulla = spreadsheet.getSheetByName('Dades');
   if (!fulla) throw new Error('No s\'ha trobat la pestanya "Dades"');
 
-  var dades = fulla.getRange('A1:S2').getValues();
+  // Ampliem rang a 8 files per incloure B8 (INTRO)
+  var dades = fulla.getRange('A1:S8').getValues();
   var valorE2 = fulla.getRange('E2').getValue();
   var valorF2 = fulla.getRange('F2').getValue();
+  // Text INTRO (B8 -> fila index 7, col index 1)
+  var introText = (dades[7] && dades[7][1] != null) ? String(dades[7][1]).trim() : '';
 
   // Selecció plantilla via CONFIG
   var templateId = CONFIG.selectTemplate(valorE2, valorF2);
@@ -80,10 +83,22 @@ function generarDocumentPrograma() {
     cos.replaceText('<<PL' + p + '>>', valorPL);
   }
 
-  // Imatges de portada
-  if (typeof inserirImatgesPortada === 'function') {
-    inserirImatgesPortada(cos, fulla);
+  // Substitució única placeholder <<INTRO>> si existeix
+  var foundIntro = cos.findText('<<INTRO>>');
+  if (foundIntro) {
+    try {
+      var safeIntro = introText.replace(/\$/g, '\\$');
+      foundIntro.getElement().asText().replaceText('<<INTRO>>', safeIntro);
+      Logger.log('[INTRO] Substituït <<INTRO>> (longitud ' + safeIntro.length + ')');
+    } catch (eIntro) {
+      Logger.log('[INTRO][ERR] ' + eIntro);
+    }
+  } else {
+    Logger.log('[INTRO] Placeholder <<INTRO>> no trobat a la plantilla');
   }
+
+  // Imatges de portada (es manté després de INTRO en cas que la plantilla les contingui separades)
+  if (typeof inserirImatgesPortada === 'function') inserirImatgesPortada(cos, fulla);
 
   document.saveAndClose();
   // Eliminat DocumentApp.flush(); en entorn on no està disponible i provocava TypeError
@@ -536,3 +551,4 @@ function generarIFormatar() {
 function substituirValorsDocumentFinal() {
   return generarIFormatar();
 }
+
